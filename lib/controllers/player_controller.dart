@@ -442,11 +442,7 @@ class PlayerController extends ChangeNotifier {
       return _api.cloudSongUrl(song);
     }
     if (song.source == SongSource.netease) {
-      // 网易云歌曲使用外链播放地址
-      return PlayUrl(
-        url: 'https://music.163.com/song/media/outer/url?id=${song.id}.mp3',
-        hash: song.hash,
-      );
+      return _api.neteaseSongUrl(song);
     }
 
     try {
@@ -972,10 +968,7 @@ class PlayerController extends ChangeNotifier {
         if (song.isCloudDrive) {
           playUrl = await _api.cloudSongUrl(song);
         } else if (song.source == SongSource.netease) {
-          playUrl = PlayUrl(
-            url: 'https://music.163.com/song/media/outer/url?id=${song.id}.mp3',
-            hash: song.hash,
-          );
+          playUrl = await _api.neteaseSongUrl(song);
         } else {
           playUrl = await _api.songUrl(song, quality: audioQuality);
         }

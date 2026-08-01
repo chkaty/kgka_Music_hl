@@ -521,6 +521,57 @@ class MusicApi {
     return PlayUrl(url: url, hash: hash);
   }
 
+  /// 获取网易云歌曲的播放地址。
+  ///
+  /// 优先通过网易云 API 获取直链；若失败则回退到外链地址。
+  Future<PlayUrl> neteaseSongUrl(Song song) async {
+    final baseUri = Uri.parse('https://wyy.music.api.hoilai.cn');
+    try {
+      final uri = baseUri.replace(
+        path: '/song/url/v1',
+        queryParameters: {
+          'id': song.id,
+          'level': 'standard',
+        },
+      );
+      final response = await _client.getRaw(uri);
+      final json = asMap(response);
+
+      String? url;
+      final data = json['data'];
+      if (data is List) {
+        final first = data.isNotEmpty ? data.first : null;
+        if (first is Map) {
+          url = asString(asMap(first)['url']);
+        }
+      } else if (data is Map) {
+        url = asString(asMap(data)['url']);
+      }
+
+      if (url != null && url.isNotEmpty) {
+        return PlayUrl(url: _normalizeNetEaseUrl(url), hash: song.hash);
+      }
+    } catch (_) {
+      // 回退外链，保持可用性。
+    }
+
+    return PlayUrl(
+      url: 'https://music.163.com/song/media/outer/url?id=${song.id}.mp3',
+      hash: song.hash,
+    );
+  }
+
+  String _normalizeNetEaseUrl(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme.isEmpty) {
+      return url;
+    }
+    if (uri.scheme.toLowerCase() == 'http') {
+      return uri.replace(scheme: 'https').toString();
+    }
+    return url;
+  }
+
   Future<void> createPlaylist(String name, {bool private = false}) async {
     await _client.post(
       '/playlist/create',
