@@ -415,8 +415,17 @@ class PlayerController extends ChangeNotifier {
     final coverUrl = song.coverUrl;
     if (coverUrl == null || coverUrl.isEmpty) return;
     if (coverUrl.startsWith('content://')) return; // 本地封面走原生加载，不预缓存
-    final provider = NetworkImage(coverUrl);
-    provider.resolve(ImageConfiguration.empty);
+    try {
+      final uri = Uri.tryParse(coverUrl);
+      final scheme = uri?.scheme.toLowerCase();
+      if ((scheme != 'http' && scheme != 'https') || (uri?.host.isEmpty ?? true)) {
+        return;
+      }
+      final provider = NetworkImage(coverUrl);
+      provider.resolve(ImageConfiguration.empty);
+    } catch (error) {
+      debugPrint('Failed to precache cover: $error');
+    }
   }
 
   /// 解析播放地址。
