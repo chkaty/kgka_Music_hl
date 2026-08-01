@@ -227,6 +227,8 @@ class PlayerController extends ChangeNotifier {
   bool desktopLyricsEnabled = false;
   DesktopLyricsSettings desktopLyricsSettings = const DesktopLyricsSettings();
   Timer? _autoResumeTimer;
+  Timer? _duckRecoveryTimer;
+  double? _volumeBeforeDuck;
   bool _resumeAfterInterruption = false;
   bool _wasPlayingBeforeInterruption = false;
   AudioInterruptionType? _lastInterruptionType;
@@ -241,6 +243,7 @@ class PlayerController extends ChangeNotifier {
   bool get isScrubbing => _isScrubbing;
   bool get isAudioEffectsSupported => _audioEffects.isAudioEffectsSupported;
   bool get isBassBoostSupported => _audioEffects.isBassBoostSupported;
+  static const double _duckedVolumeLevel = 0.22;
   String get audioEffectsLabel {
     if (!isAudioEffectsSupported) {
       return '当前平台暂不支持';
@@ -1007,12 +1010,24 @@ class PlayerController extends ChangeNotifier {
       await session.configure(_audioSessionConfiguration);
       _interruptionSub = session.interruptionEventStream.listen((event) {
         if (event.begin) {
+          _duckRecoveryTimer?.cancel();
+          _duckRecoveryTimer = null;
           _lastInterruptionType = event.type;
           _wasPlayingBeforeInterruption = isPlaying && currentSong != null;
           _resumeAfterInterruption = _wasPlayingBeforeInterruption;
 
           // 短提示音/duck：只记录状态，不主动抢回音频焦点。
           if (event.type == AudioInterruptionType.duck) {
+            if (_wasPlayingBeforeInterruption) {
+              unawaited(_applyDuckVolume());
+            }
+            if (!audioInterruptionEnabled && _wasPlayingBeforeInterruption) {
+              _duckRecoveryTimer = Timer(const Duration(milliseconds: 900), () {
+                if (currentSong != null && _resumeAfterInterruption) {
+                  unawaited(_resumePlaybackAfterInterruption());
+                }
+              });
+            }
             return;
           }
 
@@ -1021,6 +1036,9 @@ class PlayerController extends ChangeNotifier {
             unawaited(_audioHandler.pause());
           }
         } else {
+          _duckRecoveryTimer?.cancel();
+          _duckRecoveryTimer = null;
+          unawaited(_restoreVolumeAfterDuck());
           // 打断结束：强中断或短提示音结束后，按恢复策略回到原状态。
           final shouldResume = _resumeAfterInterruption &&
               _wasPlayingBeforeInterruption &&
@@ -1095,8 +1113,33 @@ class PlayerController extends ChangeNotifier {
     _autoResumeTimer = null;
     await Future<void>.delayed(const Duration(milliseconds: 250));
     await _reconfigureAudioSession();
+    await _restoreVolumeAfterDuck();
     if (currentSong != null && _resumeAfterInterruption) {
       await _audioHandler.play();
+    }
+  }
+
+  Future<void> _applyDuckVolume() async {
+    try {
+      _volumeBeforeDuck ??= audioPlayer.volume;
+      final currentVolume = _volumeBeforeDuck ?? 1.0;
+      final duckedVolume = math.min(currentVolume, _duckedVolumeLevel);
+      await audioPlayer.setVolume(duckedVolume);
+    } catch (_) {
+      // Volume control is best-effort; interruption handling still continues.
+    }
+  }
+
+  Future<void> _restoreVolumeAfterDuck() async {
+    final previousVolume = _volumeBeforeDuck;
+    if (previousVolume == null) {
+      return;
+    }
+    _volumeBeforeDuck = null;
+    try {
+      await audioPlayer.setVolume(previousVolume);
+    } catch (_) {
+      // Ignore restore failures and let playback continue.
     }
   }
 
@@ -1679,6 +1722,7 @@ class PlayerController extends ChangeNotifier {
     _becomingNoisySub?.cancel();
     _devicesSub?.cancel();
     _completionFallbackTimer?.cancel();
+    _duckRecoveryTimer?.cancel();
     unawaited(
       _audioEffects.configureEqualizer(
         audioSessionId:

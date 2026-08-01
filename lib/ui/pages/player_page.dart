@@ -1303,14 +1303,6 @@ class _TopBar extends StatelessWidget {
             song: song,
           ),
         ),
-        // List actions
-        if (song.source == SongSource.kugou)
-          SongSheetAction(
-            icon: Icons.playlist_add_rounded,
-            title: '添加到歌单',
-            onTap: () =>
-                showAddToPlaylistSheet(context: context, auth: auth, song: song),
-          ),
       ],
     );
   }
