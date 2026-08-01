@@ -228,7 +228,6 @@ class PlayerController extends ChangeNotifier {
   DesktopLyricsSettings desktopLyricsSettings = const DesktopLyricsSettings();
   Timer? _autoResumeTimer;
   Timer? _duckRecoveryTimer;
-  double? _volumeBeforeDuck;
   bool _resumeAfterInterruption = false;
   bool _wasPlayingBeforeInterruption = false;
   AudioInterruptionType? _lastInterruptionType;
@@ -243,7 +242,6 @@ class PlayerController extends ChangeNotifier {
   bool get isScrubbing => _isScrubbing;
   bool get isAudioEffectsSupported => _audioEffects.isAudioEffectsSupported;
   bool get isBassBoostSupported => _audioEffects.isBassBoostSupported;
-  static const double _duckedVolumeLevel = 0.22;
   String get audioEffectsLabel {
     if (!isAudioEffectsSupported) {
       return '当前平台暂不支持';
@@ -1016,11 +1014,8 @@ class PlayerController extends ChangeNotifier {
           _wasPlayingBeforeInterruption = isPlaying && currentSong != null;
           _resumeAfterInterruption = _wasPlayingBeforeInterruption;
 
-          // 短提示音/duck：只记录状态，不主动抢回音频焦点。
+          // 短提示音/duck：只记录状态，不主动改播放器音量。
           if (event.type == AudioInterruptionType.duck) {
-            if (_wasPlayingBeforeInterruption) {
-              unawaited(_applyDuckVolume());
-            }
             if (!audioInterruptionEnabled && _wasPlayingBeforeInterruption) {
               _duckRecoveryTimer = Timer(const Duration(milliseconds: 900), () {
                 if (currentSong != null && _resumeAfterInterruption) {
@@ -1038,7 +1033,6 @@ class PlayerController extends ChangeNotifier {
         } else {
           _duckRecoveryTimer?.cancel();
           _duckRecoveryTimer = null;
-          unawaited(_restoreVolumeAfterDuck());
           // 打断结束：强中断或短提示音结束后，按恢复策略回到原状态。
           final shouldResume = _resumeAfterInterruption &&
               _wasPlayingBeforeInterruption &&
@@ -1113,53 +1107,23 @@ class PlayerController extends ChangeNotifier {
     _autoResumeTimer = null;
     await Future<void>.delayed(const Duration(milliseconds: 250));
     await _reconfigureAudioSession();
-    await _restoreVolumeAfterDuck();
     if (currentSong != null && _resumeAfterInterruption) {
       await _audioHandler.play();
     }
   }
 
-  Future<void> _applyDuckVolume() async {
-    try {
-      _volumeBeforeDuck ??= audioPlayer.volume;
-      final currentVolume = _volumeBeforeDuck ?? 1.0;
-      final duckedVolume = math.min(currentVolume, _duckedVolumeLevel);
-      await audioPlayer.setVolume(duckedVolume);
-    } catch (_) {
-      // Volume control is best-effort; interruption handling still continues.
-    }
-  }
-
-  Future<void> _restoreVolumeAfterDuck() async {
-    final previousVolume = _volumeBeforeDuck;
-    if (previousVolume == null) {
-      return;
-    }
-    _volumeBeforeDuck = null;
-    try {
-      await audioPlayer.setVolume(previousVolume);
-    } catch (_) {
-      // Ignore restore failures and let playback continue.
-    }
-  }
-
   /// 根据打断设置生成 AudioSessionConfiguration。
   ///
-  /// 阻止打断时使用 [AndroidAudioFocusGainType.gain] 并禁用 androidWillPauseWhenDucked，
-  /// 向系统声明不希望被其他 App 打断。同时配合 interruptionEventStream 中的
-  /// 主动恢复播放作为双保险。
+  /// iOS 始终保持 music() 的 playback category，避免把 AVAudioSession 配成空值。
+  /// 阻止打断时只覆盖 Android 的音频焦点参数，并配合 interruptionEventStream
+  /// 的主动恢复作为双保险。
   AudioSessionConfiguration get _audioSessionConfiguration {
     if (audioInterruptionEnabled) {
       return const AudioSessionConfiguration.music();
     }
-    // 阻止打断模式：声明需要独占音频焦点，不因降音暂停
-    return const AudioSessionConfiguration(
-      androidAudioAttributes: AndroidAudioAttributes(
-        contentType: AndroidAudioContentType.music,
-        usage: AndroidAudioUsage.media,
-      ),
+    // 阻止打断模式：保留 iOS playback category，只调整 Android 焦点策略。
+    return const AudioSessionConfiguration.music().copyWith(
       androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
-      // 不因其他 App 降音而暂停
       androidWillPauseWhenDucked: false,
     );
   }
@@ -1169,6 +1133,9 @@ class PlayerController extends ChangeNotifier {
     audioInterruptionEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_audioInterruptionEnabledSettingKey, enabled);
+    _duckRecoveryTimer?.cancel();
+    _duckRecoveryTimer = null;
+    await audioPlayer.setVolume(1.0);
     // 设置变更后立即重新配置 AudioSession，使新策略生效
     unawaited(_reconfigureAudioSession());
     notifyListeners();

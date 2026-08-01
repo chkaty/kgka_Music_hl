@@ -79,7 +79,7 @@ class AudioInterruptionSettingsPage extends StatelessWidget {
                         ),
                         title: const Text('短提示音不打断'),
                         subtitle: const Text(
-                          '短提示音来时自动降音量，结束后恢复',
+                          '短提示音来时尽量保持播放不中断',
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
