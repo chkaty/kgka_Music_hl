@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
 import '../core/api_client.dart';
@@ -526,6 +528,8 @@ class MusicApi {
   /// 优先通过网易云 API 获取直链；若失败则回退到外链地址。
   Future<PlayUrl> neteaseSongUrl(Song song) async {
     final baseUri = Uri.parse('https://wyy.music.api.hoilai.cn');
+    final fallbackUrl =
+        'https://music.163.com/song/media/outer/url?id=${song.id}.mp3';
     try {
       final uri = baseUri.replace(
         path: '/song/url/v1',
@@ -534,8 +538,22 @@ class MusicApi {
           'level': 'standard',
         },
       );
-      final response = await _client.getRaw(uri);
-      final json = asMap(response);
+      debugPrint('NetEase URL API: $uri');
+      debugPrint('HTTP method: GET');
+      debugPrint('song.id = ${song.id}');
+      debugPrint('level = standard');
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 15));
+      debugPrint(response.body);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint('NetEase URL API failed with status: ${response.statusCode}');
+        debugPrint('Using fallback NetEase URL');
+        return PlayUrl(url: fallbackUrl, hash: song.hash);
+      }
+
+      final json = asMap(unwrapData(jsonDecode(response.body)));
 
       String? url;
       final data = json['data'];
@@ -551,14 +569,16 @@ class MusicApi {
       if (url != null && url.isNotEmpty) {
         return PlayUrl(url: _normalizeNetEaseUrl(url), hash: song.hash);
       }
-    } catch (_) {
-      // 回退外链，保持可用性。
+    } on TimeoutException catch (e, s) {
+      debugPrint('$e');
+      debugPrint('$s');
+    } catch (e, s) {
+      debugPrint('$e');
+      debugPrint('$s');
     }
 
-    return PlayUrl(
-      url: 'https://music.163.com/song/media/outer/url?id=${song.id}.mp3',
-      hash: song.hash,
-    );
+    debugPrint('Using fallback NetEase URL');
+    return PlayUrl(url: fallbackUrl, hash: song.hash);
   }
 
   String _normalizeNetEaseUrl(String url) {
