@@ -1929,23 +1929,27 @@ class PlayerController extends ChangeNotifier {
   Future<void> _syncIosWidgetState() async {
     if (!Platform.isIOS) return;
 
-    final song = currentSong;
-    if (song == null) {
-      await IosWidgetBridge.instance.syncPlaybackState(null);
-      return;
-    }
+    try {
+      final song = currentSong;
+      if (song == null) {
+        await IosWidgetBridge.instance.syncPlaybackState(null);
+        return;
+      }
 
-    await IosWidgetBridge.instance.syncPlaybackState({
-      'title': song.title,
-      'artist': song.artist,
-      'album': song.albumName,
-      'isPlaying': isPlaying,
-      'position': position.inMilliseconds.toDouble(),
-      'duration': duration.inMilliseconds.toDouble(),
-      'playbackSpeed': playbackSpeed,
-      'updatedAtMs': DateTime.now().millisecondsSinceEpoch.toDouble(),
-      'songId': song.id,
-      'hash': song.hash,
-    });
+      await IosWidgetBridge.instance.syncPlaybackState({
+        'title': song.title,
+        'artist': song.artist,
+        'album': song.albumName ?? '',
+        'isPlaying': isPlaying,
+        'position': position.inMilliseconds.toDouble(),
+        'duration': duration.inMilliseconds.toDouble(),
+        'playbackSpeed': playbackSpeed,
+        'updatedAtMs': DateTime.now().millisecondsSinceEpoch.toDouble(),
+        'songId': song.id,
+        'hash': song.hash,
+      });
+    } catch (error) {
+      debugPrint('[KA Music] Failed to sync iOS widget state: $error');
+    }
   }
 }
