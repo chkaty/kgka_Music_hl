@@ -68,7 +68,7 @@ class AudioInterruptionSettingsPage extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      SwitchListTile(
+                      SwitchListTile.adaptive(
                         value: !player.audioInterruptionEnabled,
                         onChanged: (value) =>
                             player.setAudioInterruptionEnabled(!value),
@@ -89,7 +89,7 @@ class AudioInterruptionSettingsPage extends StatelessWidget {
                         indent: 58,
                         color: colorScheme.outlineVariant.withValues(alpha: .4),
                       ),
-                      SwitchListTile(
+                      SwitchListTile.adaptive(
                         value: player.autoResumeAfterInterruption,
                         onChanged: player.setAutoResumeAfterInterruption,
                         secondary: Icon(

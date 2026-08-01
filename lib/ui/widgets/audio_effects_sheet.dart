@@ -150,7 +150,7 @@ class _EqualizerPanel extends StatelessWidget {
 
     return Column(
       children: [
-        SwitchListTile(
+        SwitchListTile.adaptive(
           contentPadding: const EdgeInsets.symmetric(horizontal: 22),
           title: const Text('启用均衡器'),
           subtitle: Text(
@@ -375,7 +375,7 @@ class _EnhancePanel extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
       children: [
-        SwitchListTile(
+        SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
           secondary: Icon(Icons.speaker_rounded, color: colorScheme.primary),
           title: const Text('低音增强'),
