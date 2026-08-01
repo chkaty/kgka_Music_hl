@@ -7,8 +7,8 @@ class SceneDelegate: FlutterSceneDelegate {
 		openURLContexts URLContexts: Set<UIOpenURLContext>
 	) {
 		for context in URLContexts {
+			let url = context.url
 			guard
-				let url = context.url,
 				url.scheme == "kgkamusichl",
 				url.host == "widget",
 				let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
