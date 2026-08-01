@@ -103,7 +103,7 @@ class _SleepTimerSheetState extends State<_SleepTimerSheet> {
                 color: colorScheme.surfaceContainer,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: SwitchListTile(
+              child: SwitchListTile.adaptive(
                 value: _finishSong,
                 onChanged: (v) {
                   setState(() => _finishSong = v);

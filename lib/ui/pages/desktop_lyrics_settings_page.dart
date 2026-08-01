@@ -311,7 +311,7 @@ class _SwitchTile extends StatelessWidget {
               ],
             ),
           ),
-          Switch(value: value, onChanged: onChanged),
+          Switch.adaptive(value: value, onChanged: onChanged),
         ],
       ),
     );
