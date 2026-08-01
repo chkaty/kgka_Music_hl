@@ -125,19 +125,19 @@ struct WidgetPlaybackWidgetView: View {
             VStack(alignment: .leading, spacing: 4) {
               Text(snapshot.isPlaying ? "正在播放" : "已暂停")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.72))
+                .foregroundColor(.white.opacity(0.72))
               Text(snapshot.title)
                 .font(.headline.weight(.bold))
-                .foregroundStyle(.white)
+                .foregroundColor(.white)
                 .lineLimit(2)
               Text(snapshot.artist)
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundColor(.white.opacity(0.78))
                 .lineLimit(1)
               if let album = snapshot.album, !album.isEmpty {
                 Text(album)
                   .font(.caption)
-                  .foregroundStyle(.white.opacity(0.62))
+                  .foregroundColor(.white.opacity(0.62))
                   .lineLimit(1)
               }
             }
@@ -145,17 +145,17 @@ struct WidgetPlaybackWidgetView: View {
           }
 
           ProgressView(value: snapshot.progress)
-            .tint(.white)
+            .accentColor(.white)
             .scaleEffect(y: 0.95)
 
           HStack {
             Text(snapshot.positionText)
               .font(.caption2.monospacedDigit())
-              .foregroundStyle(.white.opacity(0.7))
+              .foregroundColor(.white.opacity(0.7))
             Spacer()
             Text(snapshot.durationText)
               .font(.caption2.monospacedDigit())
-              .foregroundStyle(.white.opacity(0.7))
+              .foregroundColor(.white.opacity(0.7))
           }
 
           if #available(iOS 14.0, *) {
@@ -167,19 +167,19 @@ struct WidgetPlaybackWidgetView: View {
               Link(destination: openAppURL) {
                 Image(systemName: "arrow.up.right.square")
                   .font(.headline)
-                  .foregroundStyle(.white)
+                  .foregroundColor(.white)
                   .frame(width: 32, height: 32)
-                  .background(.white.opacity(0.12), in: Circle())
+                  .background(Circle().fill(Color.white.opacity(0.12)))
               }
             }
           } else {
             Link(destination: openAppURL) {
               Text("打开应用")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundColor(.white)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(.white.opacity(0.12), in: Capsule())
+                .background(Capsule().fill(Color.white.opacity(0.12)))
             }
           }
         }
@@ -188,17 +188,17 @@ struct WidgetPlaybackWidgetView: View {
         VStack(alignment: .leading, spacing: 10) {
           Text("KA Music")
             .font(.headline.weight(.bold))
-            .foregroundStyle(.white)
+            .foregroundColor(.white)
           Text("当前没有播放中的歌曲")
             .font(.subheadline)
-            .foregroundStyle(.white.opacity(0.78))
+            .foregroundColor(.white.opacity(0.78))
           Link(destination: openAppURL) {
             Text("打开应用")
               .font(.caption.weight(.semibold))
-              .foregroundStyle(.white)
+              .foregroundColor(.white)
               .padding(.horizontal, 12)
               .padding(.vertical, 8)
-              .background(.white.opacity(0.12), in: Capsule())
+              .background(Capsule().fill(Color.white.opacity(0.12)))
           }
         }
         .padding(16)
@@ -212,9 +212,9 @@ struct WidgetPlaybackWidgetView: View {
     Link(destination: widgetURL(action: action)) {
       Image(systemName: systemImage)
         .font(.headline)
-        .foregroundStyle(.white)
+        .foregroundColor(.white)
         .frame(width: 32, height: 32)
-        .background(.white.opacity(0.12), in: Circle())
+        .background(Circle().fill(Color.white.opacity(0.12)))
     }
   }
 
