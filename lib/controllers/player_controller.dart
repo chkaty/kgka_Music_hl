@@ -14,6 +14,7 @@ import '../models/music_models.dart';
 import '../services/audio_effects_service.dart';
 import '../services/cache_service.dart';
 import '../services/desktop_lyrics_service.dart';
+import '../services/ios_widget_bridge.dart';
 import '../services/music_api.dart';
 import '../services/music_audio_handler.dart';
 import '../services/playback_history_service.dart';
@@ -133,6 +134,7 @@ class PlayerController extends ChangeNotifier {
       }
       _syncListeningTimeTracker();
       _syncDesktopPlayState();
+      unawaited(_syncIosWidgetState());
       notifyListeners();
     });
     _processingStateSub = audioPlayer.processingStateStream.distinct().listen((
@@ -225,6 +227,9 @@ class PlayerController extends ChangeNotifier {
   bool desktopLyricsEnabled = false;
   DesktopLyricsSettings desktopLyricsSettings = const DesktopLyricsSettings();
   Timer? _autoResumeTimer;
+  bool _resumeAfterInterruption = false;
+  bool _wasPlayingBeforeInterruption = false;
+  AudioInterruptionType? _lastInterruptionType;
   Duration? sleepTimerRemaining;
   Timer? _sleepTimer;
   DateTime? _sleepTimerEnd;
@@ -376,10 +381,12 @@ class PlayerController extends ChangeNotifier {
         queueSongs: this.queue,
         queueIndex: currentIndex,
       );
+      unawaited(_syncIosWidgetState());
       isPreparing = false;
       notifyListeners();
       unawaited(loadLyrics(song));
       await _audioHandler.play();
+      unawaited(_syncIosWidgetState());
       // 记录播放历史与本地播放统计（后台执行，不阻塞播放）
       unawaited(_historyService.record(song));
       unawaited(_statsService.recordPlay(song));
@@ -796,6 +803,7 @@ class PlayerController extends ChangeNotifier {
       }
       await _audioHandler.play();
     }
+    unawaited(_syncIosWidgetState());
   }
 
   Future<void> play() async {
@@ -832,6 +840,7 @@ class PlayerController extends ChangeNotifier {
         return;
       }
       _setPositionBase(target, playing: isPlaying);
+      unawaited(_syncIosWidgetState());
       notifyListeners();
     } finally {
       if (serial == _seekSerial) {
@@ -845,6 +854,7 @@ class PlayerController extends ChangeNotifier {
     final nextSong = _nextSong();
     if (nextSong == null) return;
     await playSong(nextSong, queue: queue);
+    unawaited(_syncIosWidgetState());
   }
 
   Future<void> previous() async {
@@ -854,6 +864,7 @@ class PlayerController extends ChangeNotifier {
     } else {
       await seek(Duration.zero);
     }
+    unawaited(_syncIosWidgetState());
   }
 
   Future<void> _handleCompleted() async {
@@ -996,27 +1007,33 @@ class PlayerController extends ChangeNotifier {
       await session.configure(_audioSessionConfiguration);
       _interruptionSub = session.interruptionEventStream.listen((event) {
         if (event.begin) {
-          // 打断开始：系统可能已自动暂停播放器。
-          // 若开启了"阻止打断"，立即恢复播放以对抗暂停。
-          if (!audioInterruptionEnabled && isPlaying && currentSong != null) {
-            _autoResumeTimer?.cancel();
-            _autoResumeTimer = Timer(const Duration(milliseconds: 300), () {
-              if (!isPlaying && currentSong != null) {
-                unawaited(_audioHandler.play());
-              }
-            });
+          _lastInterruptionType = event.type;
+          _wasPlayingBeforeInterruption = isPlaying && currentSong != null;
+          _resumeAfterInterruption = _wasPlayingBeforeInterruption;
+
+          // 短提示音/duck：只记录状态，不主动抢回音频焦点。
+          if (event.type == AudioInterruptionType.duck) {
+            return;
+          }
+
+          // 强中断：按规范先暂停，等待结束后按状态恢复。
+          if (_wasPlayingBeforeInterruption) {
+            unawaited(_audioHandler.pause());
           }
         } else {
-          // 打断结束：若开启了"自动恢复"或"阻止打断"，恢复播放。
-          if ((autoResumeAfterInterruption || (!audioInterruptionEnabled)) &&
-              currentSong != null) {
-            _autoResumeTimer?.cancel();
-            _autoResumeTimer = Timer(const Duration(milliseconds: 500), () {
-              if (!isPlaying && currentSong != null) {
-                unawaited(_audioHandler.play());
-              }
-            });
+          // 打断结束：强中断或短提示音结束后，按恢复策略回到原状态。
+          final shouldResume = _resumeAfterInterruption &&
+              _wasPlayingBeforeInterruption &&
+              currentSong != null &&
+              (autoResumeAfterInterruption ||
+                  !audioInterruptionEnabled ||
+                  _lastInterruptionType == AudioInterruptionType.duck);
+          if (shouldResume) {
+            unawaited(_resumePlaybackAfterInterruption());
           }
+          _resumeAfterInterruption = false;
+          _wasPlayingBeforeInterruption = false;
+          _lastInterruptionType = null;
         }
       });
       _becomingNoisySub = session.becomingNoisyEventStream.listen((_) {
@@ -1070,6 +1087,16 @@ class PlayerController extends ChangeNotifier {
       });
     } catch (_) {
       // AudioSession not available on this platform
+    }
+  }
+
+  Future<void> _resumePlaybackAfterInterruption() async {
+    _autoResumeTimer?.cancel();
+    _autoResumeTimer = null;
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await _reconfigureAudioSession();
+    if (currentSong != null && _resumeAfterInterruption) {
+      await _audioHandler.play();
     }
   }
 
@@ -1776,6 +1803,7 @@ class PlayerController extends ChangeNotifier {
   void persistCurrentStateSync() {
     _persistQueueState();
     _saveCurrentPosition();
+    unawaited(_syncIosWidgetState());
   }
 
   /// 从本地存储恢复播放队列、当前歌曲和播放进度。
@@ -1861,6 +1889,7 @@ class PlayerController extends ChangeNotifier {
         queueSongs: queue,
         queueIndex: currentIndex,
       );
+      unawaited(_syncIosWidgetState());
 
       // 跳转到保存的进度
       if (restoredPosition > Duration.zero) {
@@ -1875,5 +1904,28 @@ class PlayerController extends ChangeNotifier {
       isPreparing = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _syncIosWidgetState() async {
+    if (!Platform.isIOS) return;
+
+    final song = currentSong;
+    if (song == null) {
+      await IosWidgetBridge.instance.syncPlaybackState(null);
+      return;
+    }
+
+    await IosWidgetBridge.instance.syncPlaybackState({
+      'title': song.title,
+      'artist': song.artist,
+      'album': song.albumName,
+      'isPlaying': isPlaying,
+      'position': position.inMilliseconds.toDouble(),
+      'duration': duration.inMilliseconds.toDouble(),
+      'playbackSpeed': playbackSpeed,
+      'updatedAtMs': DateTime.now().millisecondsSinceEpoch.toDouble(),
+      'songId': song.id,
+      'hash': song.hash,
+    });
   }
 }
