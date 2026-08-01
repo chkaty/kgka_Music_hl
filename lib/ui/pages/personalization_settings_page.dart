@@ -52,13 +52,23 @@ class _PersonalizationSettingsPageState
                       }).toList(),
                     ),
                   ),
+                  const _SettingsDivider(),
+                  _SettingsTile(
+                    icon: Icons.color_lens_rounded,
+                    iconColor: colorScheme.primary,
+                    title: '自定义配色',
+                    subtitle: tc.hasCustomSeedColor
+                        ? '当前已使用自定义颜色'
+                        : '打开颜色选择器，手动挑选主题色',
+                    onTap: () => _pickCustomSeedColor(),
+                  ),
                   if (tc.hasCustomSeedColor) ...[
                     const _SettingsDivider(),
                     _SettingsTile(
                       icon: Icons.refresh_rounded,
                       iconColor: colorScheme.primary,
                       title: '恢复默认配色',
-                      onTap: () => tc.setSeedColor(const Color(0xFF1478FF)),
+                      onTap: () => tc.setSeedColor(ThemeController.defaultSeedColor),
                     ),
                   ],
                 ],
@@ -139,6 +149,19 @@ class _PersonalizationSettingsPageState
       if (!mounted) return;
       Toast.error('选择图片失败：$error');
     }
+  }
+
+  Future<void> _pickCustomSeedColor() async {
+    final pickedColor = await showDialog<Color>(
+      context: context,
+      builder: (context) => _CustomSeedColorDialog(
+        initialColor: widget.themeController.seedColor,
+      ),
+    );
+    if (pickedColor == null || !mounted) return;
+    await widget.themeController.setSeedColor(pickedColor);
+    if (!mounted) return;
+    Toast.success('已应用自定义配色');
   }
 
   void _showPreview(BuildContext context, String path) {
@@ -315,6 +338,187 @@ class _BackgroundOpacitySliderState extends State<_BackgroundOpacitySlider> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ===== 自定义主题色选择器 =====
+
+class _CustomSeedColorDialog extends StatefulWidget {
+  const _CustomSeedColorDialog({required this.initialColor});
+
+  final Color initialColor;
+
+  @override
+  State<_CustomSeedColorDialog> createState() => _CustomSeedColorDialogState();
+}
+
+class _CustomSeedColorDialogState extends State<_CustomSeedColorDialog> {
+  late double _hue;
+  late double _saturation;
+  late double _value;
+
+  @override
+  void initState() {
+    super.initState();
+    final hsv = HSVColor.fromColor(widget.initialColor);
+    _hue = hsv.hue;
+    _saturation = hsv.saturation;
+    _value = hsv.value;
+  }
+
+  Color get _color => HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final previewColor = _color;
+    final previewOnColor = previewColor.computeLuminance() > 0.54
+        ? Colors.black
+        : Colors.white;
+
+    return AlertDialog(
+      title: const Text('自定义配色'),
+      content: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: previewColor,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '主题预览',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: previewOnColor,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _hexColor(previewColor),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: previewOnColor.withValues(alpha: .9),
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              _SliderField(
+                label: '色相',
+                valueLabel: '${_hue.round()}°',
+                value: _hue,
+                min: 0,
+                max: 360,
+                onChanged: (value) => setState(() => _hue = value),
+              ),
+              const SizedBox(height: 10),
+              _SliderField(
+                label: '饱和度',
+                valueLabel: '${(_saturation * 100).round()}%',
+                value: _saturation,
+                min: 0,
+                max: 1,
+                onChanged: (value) => setState(() => _saturation = value),
+              ),
+              const SizedBox(height: 10),
+              _SliderField(
+                label: '明度',
+                valueLabel: '${(_value * 100).round()}%',
+                value: _value,
+                min: 0,
+                max: 1,
+                onChanged: (value) => setState(() => _value = value),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(ThemeController.defaultSeedColor),
+          child: const Text('恢复默认'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(previewColor),
+          child: const Text('应用'),
+        ),
+      ],
+    );
+  }
+
+  String _hexColor(Color color) {
+    final rgb = color.toARGB32() & 0x00FFFFFF;
+    return '#${rgb.toRadixString(16).toUpperCase().padLeft(6, '0')}';
+  }
+}
+
+class _SliderField extends StatelessWidget {
+  const _SliderField({
+    required this.label,
+    required this.valueLabel,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String valueLabel;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const Spacer(),
+            Text(
+              valueLabel,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ],
+        ),
+        Slider(
+          value: value,
+          min: min,
+          max: max,
+          divisions: max == 1 ? 100 : 360,
+          label: valueLabel,
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }

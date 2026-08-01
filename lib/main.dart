@@ -15,6 +15,7 @@ import 'controllers/theme_controller.dart';
 import 'core/api_client.dart';
 import 'services/cache_service.dart';
 import 'services/device_info_service.dart';
+import 'services/ios_widget_bridge.dart';
 import 'services/download_service.dart';
 import 'services/music_audio_handler.dart';
 import 'services/music_api.dart';
@@ -31,8 +32,7 @@ Future<void> main() async {
   final client = ApiClient();
   final api = MusicApi(client);
 
-  final audioSession = await AudioSession.instance;
-  await audioSession.configure(const AudioSessionConfiguration.music());
+  await _configureAudioSessionForBackgroundPlayback();
 
   final audioHandler = await AudioService.init(
     builder: MusicAudioHandler.new,
@@ -54,6 +54,16 @@ Future<void> main() async {
     audioHandler: audioHandler,
     themeController: themeController,
   ));
+}
+
+/// iOS 后台播放依赖两侧同时满足：
+/// 1. `ios/Runner/Info.plist` 保留 `UIBackgroundModes: audio`
+/// 2. Flutter 侧使用与后台音乐播放一致的音频会话配置
+///
+/// 这样可以避免只开了系统权限，但代码侧仍按普通前台音频运行的情况。
+Future<void> _configureAudioSessionForBackgroundPlayback() async {
+  final audioSession = await AudioSession.instance;
+  await audioSession.configure(const AudioSessionConfiguration.music());
 }
 
 class KaMusicApp extends StatefulWidget {
@@ -103,14 +113,41 @@ class _KaMusicAppState extends State<KaMusicApp> with WidgetsBindingObserver {
     _theme = widget.themeController;
     _auth.restore();
     _downloads.initialize();
-    _restorePlaybackState();
+    unawaited(
+      _restorePlaybackState().then((_) => _consumePendingWidgetAction()),
+    );
   }
 
   /// 恢复上次的播放队列和进度。
   Future<void> _restorePlaybackState() async {
     await _player.restoreQueueState();
     if (_player.currentSong != null) {
-      unawaited(_player.prepareRestoredSong());
+      await _player.prepareRestoredSong();
+    }
+  }
+
+  Future<void> _consumePendingWidgetAction() async {
+    final action = await IosWidgetBridge.instance.consumePendingAction();
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'playPause':
+        await _player.togglePlay();
+        break;
+      case 'play':
+        await _player.play();
+        break;
+      case 'pause':
+        await _player.pause();
+        break;
+      case 'next':
+        await _player.next();
+        break;
+      case 'previous':
+        await _player.previous();
+        break;
+      case 'openApp':
+      default:
+        break;
     }
   }
 
@@ -131,6 +168,9 @@ class _KaMusicAppState extends State<KaMusicApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_consumePendingWidgetAction());
+    }
     if (!_player.desktopLyricsEnabled) return;
     switch (state) {
       case AppLifecycleState.resumed:

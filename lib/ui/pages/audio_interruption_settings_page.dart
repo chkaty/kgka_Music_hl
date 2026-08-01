@@ -23,7 +23,7 @@ class AudioInterruptionSettingsPage extends StatelessWidget {
             : Brightness.light,
       ),
       child: Scaffold(
-        appBar: AppBar(title: const Text('后台打断机制')),
+        appBar: AppBar(title: const Text('后台打断与恢复')),
         body: AnimatedBuilder(
           animation: player,
           builder: (context, _) {
@@ -48,8 +48,9 @@ class AudioInterruptionSettingsPage extends StatelessWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          '当你在听歌时，其他 App（如短视频、游戏）可能会抢占音频焦点导致音乐暂停。'
-                          '你可以在下方调整打断行为。',
+                          '当你在听歌时，系统可能会遇到两类打断：'
+                          '短提示音/duck，以及来电、Siri 这类强中断。'
+                          '你可以在下方分别查看恢复行为的说明。',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             height: 1.5,
@@ -76,9 +77,9 @@ class AudioInterruptionSettingsPage extends StatelessWidget {
                           Icons.block_rounded,
                           color: colorScheme.primary,
                         ),
-                        title: const Text('阻止后台打断'),
+                        title: const Text('短提示音不打断'),
                         subtitle: const Text(
-                          '其他 App 播放音频时不会暂停当前音乐',
+                          '短提示音来时尽量保持播放不中断',
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
@@ -96,8 +97,8 @@ class AudioInterruptionSettingsPage extends StatelessWidget {
                           Icons.play_circle_outline_rounded,
                           color: colorScheme.primary,
                         ),
-                        title: const Text('自动恢复播放'),
-                        subtitle: const Text('被打断后自动继续播放'),
+                        title: const Text('强中断后自动恢复'),
+                        subtitle: const Text('来电、Siri 等结束后按之前状态恢复播放'),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
                         ),
@@ -124,9 +125,8 @@ class AudioInterruptionSettingsPage extends StatelessWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          '兼容性提示：vivo / iQOO 等 OriginOS 系统对安卓音频框架做了深度定制，'
-                          '本功能在这些设备上可能无法正常生效。目前暂无适配方案，'
-                          '如遇到问题建议在系统设置中关闭相关后台音频优化。',
+                          '兼容性提示：vivo / iQOO 等 OriginOS 系统对安卓音频框架做了深度定制。'
+                          '如果短提示音仍会打断播放，优先检查系统音频优化与省电限制。',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             height: 1.5,

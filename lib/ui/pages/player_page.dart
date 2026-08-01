@@ -703,13 +703,6 @@ class _LandscapeHeader extends StatelessWidget {
           subtitle: player.audioEffectsLabel,
           onTap: () => showAudioEffectsSheet(context: context, player: player),
         ),
-        if (song.source == SongSource.kugou)
-          SongSheetAction(
-            icon: Icons.playlist_add_rounded,
-            title: '添加到歌单',
-            onTap: () =>
-                showAddToPlaylistSheet(context: context, auth: auth, song: song),
-          ),
         SongSheetAction(
           icon: Icons.bedtime_rounded,
           title: '定时播放',
@@ -1222,6 +1215,14 @@ class _TopBar extends StatelessWidget {
                     ? Icons.favorite_rounded
                     : Icons.favorite_border_rounded,
               ),
+              if (song.source == SongSource.kugou) ...[
+                const SizedBox(width: 8),
+                _GlassIconButton(
+                  tooltip: '添加到歌单',
+                  onPressed: () => _showAddToPlaylistSheet(context),
+                  icon: Icons.playlist_add_rounded,
+                ),
+              ],
               const SizedBox(width: 8),
               _GlassIconButton(
                 tooltip: '更多',
@@ -1302,16 +1303,12 @@ class _TopBar extends StatelessWidget {
             song: song,
           ),
         ),
-        // List actions
-        if (song.source == SongSource.kugou)
-          SongSheetAction(
-            icon: Icons.playlist_add_rounded,
-            title: '添加到歌单',
-            onTap: () =>
-                showAddToPlaylistSheet(context: context, auth: auth, song: song),
-          ),
       ],
     );
+  }
+
+  void _showAddToPlaylistSheet(BuildContext context) {
+    showAddToPlaylistSheet(context: context, auth: auth, song: song);
   }
 }
 
