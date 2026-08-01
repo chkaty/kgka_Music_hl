@@ -62,6 +62,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   bool _allSongsLoaded = false;
   String _searchQuery = '';
   _SongSortMode _sortMode = _SongSortMode.defaultOrder;
+  String _activeSongIdentity = '';
+  bool _activeSongPlaying = false;
 
   String get _sortModeLabel {
     return switch (_sortMode) {
@@ -139,17 +141,54 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   @override
   void initState() {
     super.initState();
+    _activeSongIdentity = _songIdentity(widget.player.currentSong);
+    _activeSongPlaying = widget.player.isPlaying;
+    widget.player.addListener(_handlePlayerSnapshotChanged);
     _scrollController.addListener(_maybeLoadMore);
     _loadInitial();
   }
 
   @override
+  void didUpdateWidget(covariant PlaylistDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.player != widget.player) {
+      oldWidget.player.removeListener(_handlePlayerSnapshotChanged);
+      widget.player.addListener(_handlePlayerSnapshotChanged);
+      _activeSongIdentity = _songIdentity(widget.player.currentSong);
+      _activeSongPlaying = widget.player.isPlaying;
+    }
+  }
+
+  @override
   void dispose() {
+    widget.player.removeListener(_handlePlayerSnapshotChanged);
     _scrollController
       ..removeListener(_maybeLoadMore)
       ..dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  String _songIdentity(Song? song) {
+    if (song == null) return '';
+    if (song.hash.isNotEmpty) return 'h:${song.hash}';
+    return 'i:${song.id}';
+  }
+
+  bool _isSongActive(Song song) => _activeSongIdentity == _songIdentity(song);
+
+  void _handlePlayerSnapshotChanged() {
+    final nextIdentity = _songIdentity(widget.player.currentSong);
+    final nextPlaying = widget.player.isPlaying;
+    if (nextIdentity == _activeSongIdentity &&
+        nextPlaying == _activeSongPlaying) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _activeSongIdentity = nextIdentity;
+      _activeSongPlaying = nextPlaying;
+    });
   }
 
   List<Song> get _filteredSongs {
@@ -856,6 +895,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                           song: song,
                           index: index + 1,
                           player: widget.player,
+                          active: _isSongActive(song),
+                          isPlaying: _activeSongPlaying,
                           canDelete: _canEdit,
                           onTap: () async {
                             final queue = await _ensureFullQueueForPlayback();
@@ -1309,6 +1350,8 @@ class _SongRow extends StatelessWidget {
     required this.song,
     required this.index,
     required this.player,
+    required this.active,
+    required this.isPlaying,
     required this.canDelete,
     required this.onTap,
     required this.onAddToPlaylist,
@@ -1319,6 +1362,8 @@ class _SongRow extends StatelessWidget {
   final Song song;
   final int index;
   final PlayerController player;
+  final bool active;
+  final bool isPlaying;
   final bool canDelete;
   final VoidCallback onTap;
   final VoidCallback onAddToPlaylist;
@@ -1328,15 +1373,9 @@ class _SongRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
-    // 歌曲行响应 player 重建，高频更新会触发 Windows AXTree 竞态崩溃
+    final activeColor = colorScheme.primary;
     return ExcludeSemantics(
-      child: AnimatedBuilder(
-        animation: player,
-        builder: (context, _) {
-          final active = player.currentSong?.hash == song.hash;
-          final activeColor = colorScheme.primary;
-          return InkWell(
+      child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: AnimatedContainer(
@@ -1393,7 +1432,7 @@ class _SongRow extends StatelessWidget {
                               padding: const EdgeInsets.all(3),
                               child: NowPlayingBadge(
                                 active: active,
-                                playing: player.isPlaying,
+                                playing: isPlaying,
                                 color: activeColor,
                                 size: 14,
                               ),
@@ -1495,9 +1534,7 @@ class _SongRow extends StatelessWidget {
               ],
             ),
           ),
-        );
-        },
-      ),
+        ),
     );
   }
 }
@@ -1618,4 +1655,3 @@ String _playCount(int? value) {
   }
   return '$value 次播放';
 }
-
