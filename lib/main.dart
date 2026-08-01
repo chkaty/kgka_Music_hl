@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/services.dart';
 
 import 'config/app_config.dart';
@@ -29,6 +30,10 @@ Future<void> main() async {
 
   final client = ApiClient();
   final api = MusicApi(client);
+
+  final audioSession = await AudioSession.instance;
+  await audioSession.configure(const AudioSessionConfiguration.music());
+
   final audioHandler = await AudioService.init(
     builder: MusicAudioHandler.new,
     config: const AudioServiceConfig(
@@ -190,7 +195,7 @@ class _KaMusicAppState extends State<KaMusicApp> with WidgetsBindingObserver {
 /// 全局背景图层。
 ///
 /// 当用户启用了自定义背景图时，在所有页面内容下方显示背景图，
-/// 并叠加半透明遮罩（由 [ThemeController.backgroundOpacity] 控制）。
+/// 并叠加半透明遮罩（由 [ThemeController.backgroundOpacity] 控制）���
 class _AppBackground extends StatefulWidget {
   const _AppBackground({required this.themeController, required this.child});
 
