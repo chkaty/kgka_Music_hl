@@ -745,7 +745,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           // "Failed to update ui::AXTree"）。在 Windows 上排除语义树消除提示，
           // 移动端保留无障碍功能。
           ExcludeSemantics(
-            excluding: !Platform.isWindows,
+            excluding: Platform.isWindows,
             child: CustomScrollView(
             controller: _scrollController,
             slivers: [
